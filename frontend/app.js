@@ -48,6 +48,8 @@ let currentFps = 60.0;
 let currentInferenceLatency = 0.0;
 let lastAutoSpawnTime = 0;
 
+let webcamVideo = null;
+
 // Mock Google Drive & SQLite DB States
 let isGDriveConnected = false;
 let gdriveUserEmail = "operator.alpha@knitx-ultra.com";
@@ -606,7 +608,38 @@ function onStartInspection() {
     
     logToCloudConsole("[PIPELINE] Edge fabric inspection loops online. Bounding pipeline active.");
     pushAlert("INSPECTION STARTED", "Fabric conveyor running at 15 Y/M. YOLOv8 object detection live.", "system");
+    
+    // Request device camera/webcam permission and capture feed
+    startWebcamCapture();
+    
     updateBeaconsState();
+}
+
+function startWebcamCapture() {
+    if (webcamVideo) return; // already active
+    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then(stream => {
+            webcamVideo = document.createElement('video');
+            webcamVideo.srcObject = stream;
+            webcamVideo.autoplay = true;
+            webcamVideo.playsInline = true;
+            logToCloudConsole("[HARDWARE] Device webcam access granted. Live physical feed mapped to Canvas HMI.");
+            pushAlert("CAMERA ONLINE", "Webcam feed connected. Realtime optical preprocessing active.", "success");
+        })
+        .catch(err => {
+            console.warn("Webcam access denied or unavailable:", err);
+            logToCloudConsole("[WARNING] Device webcam unavailable. Using simulated slate belt feed.");
+        });
+}
+
+function stopWebcamCapture() {
+    if (webcamVideo && webcamVideo.srcObject) {
+        try {
+            webcamVideo.srcObject.getTracks().forEach(track => track.stop());
+        } catch(e) {}
+        webcamVideo = null;
+        logToCloudConsole("[HARDWARE] Webcam capture stream offline.");
+    }
 }
 
 function onPauseInspection() {
@@ -667,6 +700,10 @@ function onStopInspection() {
 
     logToCloudConsole(`[PIPELINE] Inspection completed for ${RollId}. Reports saved locally.`);
     pushAlert("INSPECTION COMPLETED", `Inspection stopped. Total Defects: ${totalDefects}, Penalty Points: ${totalPenaltyPoints}.`, "success");
+    
+    // Release device camera/webcam stream
+    stopWebcamCapture();
+    
     updateBeaconsState();
 }
 
@@ -727,6 +764,10 @@ function onReset() {
 
         logToCloudConsole("[SYSTEM] active session metrics and log charts reset.");
         pushAlert("INSPECTION RESET", "All current fabric roll metrics and logs have been wiped.", "alarm");
+        
+        // Release device camera/webcam stream
+        stopWebcamCapture();
+        
         updateBeaconsState();
     }
 }
@@ -896,24 +937,32 @@ function canvasConveyorLoop() {
             }
         }
 
-        // Clear viewport
-        ctx.fillStyle = '#0f172a'; // slate-900 background matches Figma
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Clear viewport and draw video feed or fallback pattern
+        if (webcamVideo && webcamVideo.readyState >= 2) {
+            ctx.drawImage(webcamVideo, 0, 0, canvas.width, canvas.height);
+            
+            // Premium dark-slate semi-transparent optical preprocess lens tint matching HMI prototype
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = '#0f172a'; // slate-900 background matches Figma
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 1. Draw mechanical knit scrolling pattern grid texture
-        ctx.strokeStyle = '#1e293b'; // slate-800 grids
-        ctx.lineWidth = 1;
-        
-        scrollOffset += 1.8; // scroll velocity
-        if (scrollOffset >= 40) scrollOffset = 0;
+            // 1. Draw mechanical knit scrolling pattern grid texture
+            ctx.strokeStyle = '#1e293b'; // slate-800 grids
+            ctx.lineWidth = 1;
+            
+            scrollOffset += 1.8; // scroll velocity
+            if (scrollOffset >= 40) scrollOffset = 0;
 
-        for (let x = 0; x < canvas.width; x += 20) {
-            ctx.beginPath();
-            for (let y = -40; y < canvas.height + 40; y += 20) {
-                const waveY = y + scrollOffset;
-                ctx.arc(x + 10, waveY, 6, 0, Math.PI, true);
+            for (let x = 0; x < canvas.width; x += 20) {
+                ctx.beginPath();
+                for (let y = -40; y < canvas.height + 40; y += 20) {
+                    const waveY = y + scrollOffset;
+                    ctx.arc(x + 10, waveY, 6, 0, Math.PI, true);
+                }
+                ctx.stroke();
             }
-            ctx.stroke();
         }
 
         // 2. Draw defects scrolling down conveyor
