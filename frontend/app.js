@@ -978,7 +978,10 @@ function canvasConveyorLoop() {
     
     // Canvas dimensions are responsive
     if (isRunning && !isPaused) {
-        // Auto spawn simulated defects in standalone mode every 12 seconds
+        // Bypassed automatic random defect spawning.
+        // The dashboard, metrics, and sound alarms will now ONLY activate when a genuine defect 
+        // is captured by the camera, or when you manually click one of the 'Inject target' buttons.
+        /*
         const now = Date.now();
         if (now - lastAutoSpawnTime >= 12000) {
             // If it's the very first spawn, offset lastAutoSpawnTime to prevent immediate double spawn
@@ -991,6 +994,7 @@ function canvasConveyorLoop() {
                 injectDefect(randomType);
             }
         }
+        */
 
         // Clear viewport and draw video feed or fallback pattern
         if (webcamVideo && webcamVideo.readyState >= 2) {
