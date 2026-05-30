@@ -8,10 +8,14 @@ import cv2
 
 
 class ThreadedCamera:
-    def __init__(self, camera_index: int = 0, width: int = 640, height: int = 480) -> None:
-        self.capture = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-        if not self.capture.isOpened():
+    def __init__(self, camera_index: int | str = 0, width: int = 640, height: int = 480) -> None:
+        if isinstance(camera_index, str):
+            # For remote Wi-Fi network streams (MJPEG, RTSP, etc.)
             self.capture = cv2.VideoCapture(camera_index)
+        else:
+            self.capture = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+            if not self.capture.isOpened():
+                self.capture = cv2.VideoCapture(camera_index)
         self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)

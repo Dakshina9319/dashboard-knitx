@@ -107,14 +107,14 @@ def frame_processing_loop(camera_idx):
     scroll_offset = 0.0
     last_tick_time = time.time()
     
-    # Try to open actual hardware camera indices
+    # Try to open actual hardware camera or stream
     webcam = None
     try:
-        # Check if actual camera can be started
+        # Check if camera source can be started
         webcam = ThreadedCamera(camera_index=camera_idx).start()
-        print(f"[SYSTEM] Hardware camera index {camera_idx} successfully initialized.")
+        print(f"[SYSTEM] Camera source '{camera_idx}' successfully initialized.")
     except Exception as e:
-        print(f"[SYSTEM] Hardware camera index {camera_idx} not found. Falling back to synthetic virtual scrolling feed. ({e})")
+        print(f"[SYSTEM] Camera source '{camera_idx}' not found or failed. Falling back to synthetic virtual scrolling feed. ({e})")
 
     while True:
         loop_start = time.time()
@@ -601,8 +601,13 @@ def main():
     parser = argparse.ArgumentParser(description="KnitX HMI Integration Bridge Server")
     parser.add_argument("--config", default="config/knitx_config.yaml", help="Path to config file")
     parser.add_argument("--port", type=int, default=5000, help="Bridge server HTTP port")
-    parser.add_argument("--camera", type=int, default=0, help="Camera index to use")
+    parser.add_argument("--camera", type=str, default="0", help="Camera index or remote Wi-Fi stream URL (e.g., http://192.168.1.100:5001/video_feed)")
     args = parser.parse_args()
+
+    # Convert to int if it represents a local camera index (all digits)
+    camera_source = args.camera
+    if camera_source.isdigit():
+        camera_source = int(camera_source)
 
     # Load and resolve default config files
     config_data = load_config(args.config)
@@ -612,14 +617,14 @@ def main():
     print("      KnitX Edge-AI Inspection Integration Bridge")
     print("=======================================================")
     print(f" Port number    : {args.port}")
-    print(f" Camera index   : {args.camera}")
+    print(f" Camera source  : {camera_source}")
     print(f" Model path     : {config_data['model']['path']}")
     print(f" Bounding size  : {config_data['model']['image_size']}px")
     print(f" Environment    : {config_data['project']['environment']}")
     print("=======================================================\n")
 
     # Start frame processing background worker thread
-    proc_thread = threading.Thread(target=frame_processing_loop, args=(args.camera,), daemon=True)
+    proc_thread = threading.Thread(target=frame_processing_loop, args=(camera_source,), daemon=True)
     proc_thread.start()
 
     # Launch multi-threaded bridge HTTP server
