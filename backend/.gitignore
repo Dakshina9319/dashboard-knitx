@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+config/google_drive_credentials.json
+data/google_drive_token.json
+data/database/*.db
+data/database/*.db-*
+data/defect_images/*.jpg
+data/reports/*.json
+data/reports/*.png
+data/reports/*.pdf
+data/reports/visualizations/*.jpg
