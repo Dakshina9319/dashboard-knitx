@@ -46,6 +46,7 @@ let scanlineY = 0;
 let scanlineDirection = 1;
 let currentFps = 60.0;
 let currentInferenceLatency = 0.0;
+let lastAutoSpawnTime = 0;
 
 // Mock Google Drive & SQLite DB States
 let isGDriveConnected = false;
@@ -699,6 +700,7 @@ function onReset() {
         defectLogs = [];
         activeDefectsInFeed = [];
         trendData = [{ time: "0m", holes: 0, needleLines: 0, id: "0" }];
+        lastAutoSpawnTime = 0;
 
         // Clear absolute DOM bounding boxes
         document.getElementById('live-bounding-boxes-container').innerHTML = '';
@@ -880,6 +882,20 @@ function canvasConveyorLoop() {
     
     // Canvas dimensions are responsive
     if (isRunning && !isPaused) {
+        // Auto spawn simulated defects in standalone mode every 12 seconds
+        const now = Date.now();
+        if (now - lastAutoSpawnTime >= 12000) {
+            // If it's the very first spawn, offset lastAutoSpawnTime to prevent immediate double spawn
+            if (lastAutoSpawnTime === 0) {
+                lastAutoSpawnTime = now - 4000; // spawn in 8s instead of immediately
+            } else {
+                lastAutoSpawnTime = now;
+                const defectTypes = ['Hole', 'Drop Stitch', 'Oil Stain', 'Broken Yarn'];
+                const randomType = defectTypes[Math.floor(Math.random() * defectTypes.length)];
+                injectDefect(randomType);
+            }
+        }
+
         // Clear viewport
         ctx.fillStyle = '#0f172a'; // slate-900 background matches Figma
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1430,27 +1446,28 @@ function updateBeaconsState() {
     const gdriveBeacon = document.getElementById('beacon-gdrive');
     const gdriveText = document.getElementById('gdrive-status-badge');
 
-    const allFiveConnected = isRunning && !isPaused && isGDriveConnected;
+    // Dynamically light up core hardware beacons when the scroller is actively running
+    const isInspectionRunning = isRunning && !isPaused;
 
-    if (allFiveConnected) {
-        // All 5 connected properly -> All turn green and blink!
+    if (isInspectionRunning) {
         if (cameraBeacon) cameraBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
         if (yoloBeacon) yoloBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
         if (lightBeacon) lightBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
         if (dbBeacon) dbBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
-        if (gdriveBeacon) gdriveBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
-        if (gdriveText) gdriveText.innerText = "DRIVE: ON";
     } else {
-        // Otherwise, they remain OFF (static red bg-red-400)
         if (cameraBeacon) cameraBeacon.className = "w-2 h-2 rounded-full bg-red-400";
         if (yoloBeacon) yoloBeacon.className = "w-2 h-2 rounded-full bg-red-400";
         if (lightBeacon) lightBeacon.className = "w-2 h-2 rounded-full bg-red-400";
         if (dbBeacon) dbBeacon.className = "w-2 h-2 rounded-full bg-red-400";
+    }
+
+    // Google Drive cloud beacon responds to OAuth link connection state
+    if (isGDriveConnected) {
+        if (gdriveBeacon) gdriveBeacon.className = "w-2 h-2 rounded-full bg-green-400 blinking-dot";
+        if (gdriveText) gdriveText.innerText = "DRIVE: ON";
+    } else {
         if (gdriveBeacon) gdriveBeacon.className = "w-2 h-2 rounded-full bg-red-400";
-        
-        if (gdriveText) {
-            gdriveText.innerText = isGDriveConnected ? "DRIVE: ON" : "DRIVE: OFF";
-        }
+        if (gdriveText) gdriveText.innerText = "DRIVE: OFF";
     }
 }
 window.updateBeaconsState = updateBeaconsState;
@@ -1767,13 +1784,24 @@ window.clearSQLiteHistory = clearSQLiteHistory;
 let isHighTempAlertActive = false;
 
 function updateHardwareFluctuations() {
-    currentInferenceLatency = 0.0;
-    const latencyEl = document.getElementById('inf-latency');
-    if (latencyEl) latencyEl.innerText = `0.0 ms`;
+    // If connected to python server, status polling updates these, so we do nothing here
+    if (useBackendBridge) return;
 
-    // Static baseline stats (no random fluctuations)
-    const cpuLoad = 0;
-    const cpuTemp = 35.0;
+    let cpuLoad = 12;
+    let cpuTemp = 41.2;
+    currentInferenceLatency = 0.0;
+
+    if (isRunning && !isPaused) {
+        // High fidelity simulated edge diagnostics matching RPi5 + YOLO ONNX
+        cpuLoad = Math.floor(Math.random() * 12) + 24; // 24% to 35% CPU Load
+        cpuTemp = 52.0 + Math.random() * 6.5; // 52.0°C to 58.5°C
+        currentInferenceLatency = 14.5 + Math.random() * 4.1; // 14.5ms to 18.6ms
+    }
+
+    const latencyEl = document.getElementById('inf-latency');
+    if (latencyEl) {
+        latencyEl.innerText = currentInferenceLatency > 0 ? `${currentInferenceLatency.toFixed(1)} ms` : `0.0 ms`;
+    }
 
     // Update UI elements in Analytics tab
     const cpuValEl = document.getElementById('pb-cpu-val');
@@ -1783,10 +1811,18 @@ function updateHardwareFluctuations() {
 
     if (cpuValEl) cpuValEl.innerText = `${cpuLoad}%`;
     if (cpuBarEl) cpuBarEl.style.width = `${cpuLoad}%`;
-    if (tempValEl) tempValEl.innerText = `${cpuTemp} °C`;
+    if (tempValEl) tempValEl.innerText = `${cpuTemp.toFixed(1)} °C`;
     if (tempBarEl) {
         tempBarEl.style.width = `${cpuTemp}%`;
-        tempBarEl.className = "h-full bg-green-500 transition-all duration-300";
+        
+        // Dynamically style temperature bar color based on thresholds
+        if (cpuTemp > 65) {
+            tempBarEl.className = "h-full bg-red-500 transition-all duration-300";
+        } else if (cpuTemp > 50) {
+            tempBarEl.className = "h-full bg-yellow-500 transition-all duration-300";
+        } else {
+            tempBarEl.className = "h-full bg-green-500 transition-all duration-300";
+        }
     }
 
     // Maintain stable flat temperature history for sparkline
