@@ -8,7 +8,7 @@
 // Example: const BACKEND_URL = "http://10.111.217.38:5000";
 // To find your Pi's IP: run  hostname -I  in the Pi terminal
 // ─────────────────────────────────────────────────────────────────────────────
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = "http://127.0.0.1:5000";
 
 
 // Global state variables matching the Figma prototype state structure
@@ -129,7 +129,7 @@ function detectBackendBridge() {
         .then(data => {
             if (!useBackendBridge) {
                 useBackendBridge = true;
-                logToCloudConsole("[SYSTEM] Edge-AI bridge detected at ${BACKEND_URL}. Synchronizing YOLO/RPi sensors.");
+                logToCloudConsole(`[SYSTEM] Edge-AI bridge detected at ${BACKEND_URL}. Synchronizing YOLO/RPi sensors.`);
                 pushAlert("EDGE-AI ONLINE", "Linked with local Python camera capture and YOLO inspection runtime.", "success");
                 
                 // Swap buttons class visual to match backend initial config state
@@ -151,6 +151,8 @@ function detectBackendBridge() {
                     bridgeStatusInterval = null;
                 }
             }
+            // Auto-retry checking backend status every 2 seconds
+            setTimeout(detectBackendBridge, 2000);
         });
 }
 
