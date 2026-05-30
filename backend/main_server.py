@@ -524,6 +524,73 @@ class KnitXBridgeHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode())
 
+        elif self.path == '/api/process_frame':
+            try:
+                # Read raw binary JPEG data from POST body
+                raw_data = self.rfile.read(content_length)
+                nparr = np.frombuffer(raw_data, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                if frame is not None:
+                    with state_lock:
+                        if runtime_instance is not None and is_running and not is_paused:
+                            visualized, new_defect = runtime_instance.process_frame(frame, "client_webcam")
+                            
+                            # Keep latest_frame_jpeg updated in case someone requests /video_feed
+                            ok, encoded = cv2.imencode('.jpg', visualized)
+                            if ok:
+                                latest_frame_jpeg = encoded.tobytes()
+                                
+                                # Re-fetch recorded defects inside lock to synchronize metrics
+                                defects = runtime_instance.db.fetch_defects(runtime_instance.session_id)
+                                global total_defects, total_points, hole_count, needle_line_count, quality_score
+                                global points_per_100, fabric_grade, logged_defects_list
+                                
+                                logged_defects_list = []
+                                total_defects = len(defects)
+                                total_points = 0
+                                hole_count = 0
+                                needle_line_count = 0
+                                
+                                for d in defects:
+                                    dtype = d["defect_type"]
+                                    pts = d["points"]
+                                    total_points += pts
+                                    if dtype == "Hole":
+                                        hole_count += 1
+                                    else:
+                                        needle_line_count += 1
+                                    
+                                    logged_defects_list.append({
+                                        "id": str(d["id"]),
+                                        "type": dtype,
+                                        "size": d["size_inch"] * 25.4, # mm
+                                        "x": float(d["bbox_x1"]),
+                                        "y": float(d["bbox_y1"]),
+                                        "time": d["timestamp"].split()[-1],
+                                        "points": pts,
+                                        "sync": "LOCAL ONLY" if not gdrive_connected else "SYNCED"
+                                    })
+                                
+                                # Quality score calculations
+                                quality_score = max(0.0, min(100.0, 100.0 - (total_points / 40.0 * 100.0)))
+                                points_per_100 = (total_points * gsm * 0.083) / roll_weight_kg
+                                fabric_grade = "ACCEPT" if points_per_100 <= 20 else ("SECOND QUALITY" if points_per_100 <= 40 else "REJECT")
+                                
+                                self.send_response(200)
+                                self.send_header('Content-Type', 'image/jpeg')
+                                self.end_headers()
+                                self.wfile.write(latest_frame_jpeg)
+                                return
+                
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Failed to process frame or session not running.")
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f"Error processing frame: {e}".encode())
+
         else:
             self.send_response(404)
             self.end_headers()

@@ -47,6 +47,7 @@ let scanlineDirection = 1;
 let currentFps = 60.0;
 let currentInferenceLatency = 0.0;
 let lastAutoSpawnTime = 0;
+let lastUploadTime = 0;
 
 let webcamVideo = null;
 
@@ -557,6 +558,10 @@ function onStartInspection() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "start" })
         });
+        
+        // Request device camera/webcam permission to feed frames to local backend AI
+        startWebcamCapture();
+        
         return;
     }
     if (isRunning && !isPaused) return;
@@ -640,6 +645,43 @@ function stopWebcamCapture() {
         webcamVideo = null;
         logToCloudConsole("[HARDWARE] Webcam capture stream offline.");
     }
+}
+
+const tempCanvas = document.createElement('canvas');
+const tempCtx = tempCanvas.getContext('2d');
+let isUploadingFrame = false;
+
+function postWebcamFrameToBackend() {
+    if (!webcamVideo || webcamVideo.readyState < 2 || !isRunning || isPaused || !useBackendBridge) return;
+    if (isUploadingFrame) return; // prevent parallel overlapping uploads
+    isUploadingFrame = true;
+
+    tempCanvas.width = 640;
+    tempCanvas.height = 480;
+    tempCtx.drawImage(webcamVideo, 0, 0, 640, 480);
+
+    tempCanvas.toBlob(blob => {
+        if (!blob) {
+            isUploadingFrame = false;
+            return;
+        }
+
+        fetch(`${BACKEND_URL}/api/process_frame`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'image/jpeg' },
+            body: blob
+        })
+        .then(res => {
+            isUploadingFrame = false;
+            if (res.status !== 200) {
+                console.warn("Backend process_frame returned non-200");
+            }
+        })
+        .catch(err => {
+            isUploadingFrame = false;
+            console.error("Failed to upload frame to backend:", err);
+        });
+    }, 'image/jpeg', 0.6); // 60% quality is very lightweight and perfect for Edge-AI YOLO re-scaling!
 }
 
 function onPauseInspection() {
@@ -900,6 +942,15 @@ function canvasConveyorLoop() {
         } catch(e) {}
         
         if (isRunning && !isPaused) {
+            // Upload current webcam frame to local python AI server at throttled 10 FPS
+            if (webcamVideo && webcamVideo.readyState >= 2) {
+                const now = Date.now();
+                if (now - lastUploadTime >= 100) {
+                    lastUploadTime = now;
+                    postWebcamFrameToBackend();
+                }
+            }
+
             scanlineY += scanlineDirection * 2.8;
             if (scanlineY >= canvas.height || scanlineY <= 0) {
                 scanlineDirection = -scanlineDirection;
