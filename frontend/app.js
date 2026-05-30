@@ -395,6 +395,10 @@ window.submitLogin = function() {
 };
 
 window.openInspectionSetup = function() {
+    if (isRunning || isPaused || RollId !== "") {
+        onStartInspection();
+        return;
+    }
     const modal = document.getElementById('inspection-setup-modal');
     if (modal) {
         modal.classList.remove('hidden');
@@ -474,6 +478,9 @@ window.submitSessionInit = function() {
 
                 // Close the inspection setup modal after successful submit
                 closeInspectionSetup();
+                
+                // Automatically start the inspection scroller/feed
+                onStartInspection();
             } else {
                 alert("Failed to configure edge session: " + data.message);
             }
@@ -508,11 +515,11 @@ window.submitSessionInit = function() {
         // Update status indicators
         updateBeaconsState();
 
-        // Hide session config startup modal overlay
-        const modal = document.getElementById('session-init-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
+        // Close the inspection setup modal after successful submit
+        closeInspectionSetup();
+
+        // Automatically start the inspection scroller/feed
+        onStartInspection();
     }
 };
 
