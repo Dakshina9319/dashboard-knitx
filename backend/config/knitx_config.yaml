@@ -1,9 +1,9 @@
-﻿project:
+project:
   name: KnitX
   environment: development
 
 model:
-  path: models/knitx_best.pt
+  path: models/knitx_best.onnx
   confidence: 0.25
   image_size: 640
   device: cpu

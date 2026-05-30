@@ -61,16 +61,17 @@ Since RPi OS Bookworm enforces **PEP 668** (externally managed environments), yo
     ```bash
     pip install --upgrade pip setuptools wheel
     ```
-4.  Install the required packages:
+4.  Install the lightweight, Pi-optimized packages:
     ```bash
-    pip install -r requirements.txt
+    pip install -r requirements_rpi5.txt
     ```
 
-> [!NOTE]
-> For optimal Edge-AI inference on RPi 5's ARM Cortex-A76 CPU, we recommend installing **ONNX Runtime** instead of heavy PyTorch. ONNX Runtime is extremely lightweight and achieves **15–20 FPS** on RPi 5 CPU:
-> ```bash
-> pip install onnxruntime
-> ```
+> [!IMPORTANT]
+> **Why use `requirements_rpi5.txt`?**
+> The standard `requirements.txt` installs `ultralytics`, which automatically downloads **PyTorch (`torch` & `torchvision`)** exceeding **2.6 GB** in size. On a Raspberry Pi 5 with a typical SD card, this causes a **"not enough space error"** and is highly inefficient.
+>
+> `requirements_rpi5.txt` bypasses `ultralytics` and PyTorch completely. The KnitX backend will run pure **OpenCV DNN-based ONNX inference** instead, reducing the software installation footprint from **3.5 GB to less than 80 MB**!
+
 
 ---
 
@@ -116,11 +117,9 @@ If you want to run the frontend completely offline without internet access:
 
 To get the absolute highest frame rates and lowest latency on your 4GB RPi 5:
 
-1.  **Use ONNX format models (`.onnx`)**: Avoid PyTorch (`.pt`) model files on the RPi. ONNX models are highly optimized for CPU math. Export your YOLO model to ONNX:
-    ```bash
-    # Run on your development PC to export:
-    yolo export model=knitx_best.pt format=onnx imgsz=640
-    ```
-    Copy the `knitx_best.onnx` file to the Pi under `backend/models/` and update your config in `config/knitx_config.yaml` to point to it.
+1.  **Use ONNX format models (`.onnx`)**: Avoid PyTorch (`.pt`) model files on the RPi. ONNX models are highly optimized for CPU math and don't require heavy dependencies.
+    *   **Done for you!** We have pre-exported the model to **`backend/models/knitx_best.onnx`** (only 9.4 MB compared to 20.7 MB for the `.pt` file).
+    *   **Done for you!** The default config in `backend/config/knitx_config.yaml` is already updated to point to this ONNX model.
+    *   No PyTorch or Ultralytics needed! Pure OpenCV DNN-based inference is used out-of-the-box.
 2.  **Enable Active Cooling**: The RPi 5 Cortex-A76 CPU runs YOLO inference very fast, but will thermal-throttle (slow down) if it exceeds 80°C. Using the active cooler keeps it under 60°C, maintaining a solid **15+ FPS** indefinitely.
 3.  **Optimize Camera Input Size**: Set the preprocessed resolution in `config/knitx_config.yaml` to `640x480` or `320x240`. Downscaling the input frame before feeding it into the YOLO model drastically cuts down the inference latency.
