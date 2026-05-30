@@ -8,7 +8,7 @@
 // Example: const BACKEND_URL = "http://10.111.217.38:5000";
 // To find your Pi's IP: run  hostname -I  in the Pi terminal
 // ─────────────────────────────────────────────────────────────────────────────
-const BACKEND_URL = "http://127.0.0.1:5000";
+const BACKEND_URL = "http://127.0.0.1:5005";
 
 
 // Global state variables matching the Figma prototype state structure
