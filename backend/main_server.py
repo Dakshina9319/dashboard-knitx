@@ -541,10 +541,8 @@ class KnitXBridgeHandler(BaseHTTPRequestHandler):
                             if ok:
                                 latest_frame_jpeg = encoded.tobytes()
                                 
-                                # Re-fetch recorded defects inside lock to synchronize metrics
+                                 # Re-fetch recorded defects inside lock to synchronize metrics
                                 defects = runtime_instance.db.fetch_defects(runtime_instance.session_id)
-                                global total_defects, total_points, hole_count, needle_line_count, quality_score
-                                global points_per_100, fabric_grade, logged_defects_list
                                 
                                 logged_defects_list = []
                                 total_defects = len(defects)

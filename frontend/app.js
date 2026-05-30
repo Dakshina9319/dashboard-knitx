@@ -559,8 +559,10 @@ function onStartInspection() {
             body: JSON.stringify({ action: "start" })
         });
         
-        // Request device camera/webcam permission to feed frames to local backend AI
-        startWebcamCapture();
+        // Bypassed local browser camera capture when connected to the backend.
+        // This ensures we pull the remote Raspberry Pi 5 camera feed (configured in main_server.py)
+        // instead of overriding it with the developer's laptop/PC webcam.
+        // startWebcamCapture();
         
         return;
     }
